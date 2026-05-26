@@ -375,3 +375,105 @@ if (appData && appData.isLoggedIn) {
 } else {
     navigate('login-view');
 }
+
+// ==========================================
+// --- MÓDULO DE COLETA SELETIVA ---
+// ==========================================
+
+const coletaData = [
+    { dia: 'Segunda-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'Povo Novo', 'Sítio Santa Cruz'] },
+    { dia: 'Segunda-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Barra', 'Cohab IV', 'Castelo Branco', 'Centro Secundário', 'Rua Benjamin Constant até Alm. Barroso'] },
+    
+    { dia: 'Terça-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'BGV', 'Vila Militar', 'Santa Tereza', 'Navegantes', 'Lar Gaúcho', 'Salgado Filho', 'Mangueira'] },
+    { dia: 'Terça-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Cassino', 'ABC Loteamento Otero', 'Vila São Jorge', 'Parque Universitário', 'Humaitá', 'Aeroporto', 'Vila Maria José', 'Marluz'] },
+    
+    { dia: 'Quarta-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'Miguel de Castro Moreira', 'Lagoa', 'Cohab II', 'Cidade Nova'] },
+    { dia: 'Quarta-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Frederico Ernesto Buchholz', 'Rural', 'Municipal', 'Hidráulica', 'Bernadeth', 'Parque Coelho', 'Vila Dias', 'Vila São Paulo'] },
+    
+    { dia: 'Quinta-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'São Miguel', 'São João', 'Profilurb', 'Vila Recreio', 'Vila Braz', 'Junção', 'América'] },
+    { dia: 'Quinta-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Santa Rosa', 'Central Park', 'Jardim do Sol', 'Parque Marinha'] },
+    
+    { dia: 'Sexta-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'Cassino', 'Av. Rio Grande até Jorge do Campos'] },
+    { dia: 'Sexta-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Querência', 'Parque Cassino', 'Parque Guanabara', 'Av. Rio Grande até Luiz Leivas Otero'] },
+    
+    { dia: 'Sábado', turno: 'Manhã (7h30 às 11h30)', bairros: ['Parque São Pedro', 'Senandes', 'Greenvilage', 'Boa Vista I e II', 'Vila Alfa', 'Bolacha', 'Cassino', 'Horto'] }
+];
+
+function populateBairrosDropdown() {
+    const select = document.getElementById('bairro-select');
+    if (!select) return;
+    
+    let todosBairros = new Set();
+    coletaData.forEach(item => item.bairros.forEach(b => todosBairros.add(b)));
+    
+    // Organiza os bairros em ordem alfabética no Select
+    let bairrosArray = Array.from(todosBairros).sort((a, b) => a.localeCompare(b));
+    bairrosArray.forEach(bairro => {
+        let opt = document.createElement('option');
+        opt.value = bairro;
+        opt.textContent = bairro;
+        select.appendChild(opt);
+    });
+}
+
+function renderColeta(filterBairro = 'todos') {
+    const resultsDiv = document.getElementById('coleta-results');
+    if (!resultsDiv) return;
+    resultsDiv.innerHTML = '';
+
+    if (filterBairro === 'todos') {
+        const dias = [...new Set(coletaData.map(d => d.dia))];
+        dias.forEach(dia => {
+            let html = `<div style="margin-bottom: 24px;">
+                            <h4 style="color: var(--primary-dark); font-size: 18px; margin-bottom: 12px; font-weight: 800;">${dia}</h4>`;
+            
+            coletaData.filter(d => d.dia === dia).forEach(turno => {
+                html += `<div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                            <strong style="font-size: 14px; color: var(--text-main); display: block; margin-bottom: 8px;">${turno.turno}</strong>
+                            <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;">${turno.bairros.join(', ')}</p>
+                         </div>`;
+            });
+            html += `</div>`;
+            resultsDiv.innerHTML += html;
+        });
+    } else {
+        // Exibir apenas o dia/turno que corresponda ao bairro selecionado
+        let found = false;
+        coletaData.forEach(item => {
+            if (item.bairros.includes(filterBairro)) {
+                found = true;
+                resultsDiv.innerHTML += `
+                    <div style="background: var(--primary-light); padding: 20px; border-radius: 16px; margin-bottom: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <h4 style="color: var(--primary-dark); font-size: 18px; margin-bottom: 8px; font-weight: 800;">${item.dia}</h4>
+                        <strong style="font-size: 15px; color: var(--primary-dark); display: block;">${item.turno}</strong>
+                    </div>
+                `;
+            }
+        });
+        if (!found) {
+            resultsDiv.innerHTML = `<p style="font-size: 14px; color: var(--text-muted); text-align: center; margin-top: 32px;">Nenhum horário encontrado para este bairro.</p>`;
+        }
+    }
+}
+
+function openColetaModal() {
+    const modal = document.getElementById('coleta-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('bairro-select').value = 'todos'; // Reseta sempre pra todos
+        renderColeta('todos');
+    }
+}
+
+function closeColetaModal() {
+    const modal = document.getElementById('coleta-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function filterColeta() {
+    const val = document.getElementById('bairro-select').value;
+    renderColeta(val);
+}
+
+// Inicializar preenchimento da caixa de bairros
+setTimeout(populateBairrosDropdown, 300);
