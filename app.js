@@ -187,24 +187,48 @@ function handleImageSelection(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        const img = new Image();
-        img.onload = function() {
-            const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800;
-            const scaleSize = MAX_WIDTH / img.width;
-            canvas.width = MAX_WIDTH;
-            canvas.height = img.height * scaleSize;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    // Em vez de ler como Base64 na RAM, criamos uma referência direta e leve
+    const objectUrl = URL.createObjectURL(file);
+    
+    const img = new Image();
+    img.onload = function() {
+        // 1. Libera a memória da referência original imediatamente após o carregamento
+        URL.revokeObjectURL(objectUrl);
 
-            currentDraft.image = canvas.toDataURL('image/jpeg', 0.7);
-            fetchLocationAndProceed();
-        };
-        img.src = event.target.result;
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        
+        let width = img.width;
+        let height = img.height;
+        
+        // 2. Calcula a proporção apenas se a imagem for maior que o limite
+        if (width > MAX_WIDTH) {
+            height = Math.floor(height * (MAX_WIDTH / width));
+            width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // 3. Salva a versão já reduzida (compressão de 60% é ideal para web)
+        currentDraft.image = canvas.toDataURL('image/jpeg', 0.6);
+        
+        // 4. Força a limpeza do canvas para ajudar o coletor de lixo do navegador
+        canvas.width = 0;
+        canvas.height = 0;
+
+        fetchLocationAndProceed();
     };
-    reader.readAsDataURL(file);
+    
+    img.onerror = function() {
+        alert("Erro ao processar a foto. Tente tirar a foto novamente.");
+        URL.revokeObjectURL(objectUrl);
+    };
+
+    img.src = objectUrl;
 }
 
 const camInp = document.getElementById('camera-input');
