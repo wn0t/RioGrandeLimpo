@@ -183,54 +183,73 @@ window.openCamera = function() {
     if (camInput) camInput.click(); 
 }
 
-function handleImageSelection(e) {
+async function handleImageSelection(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Em vez de ler como Base64 na RAM, criamos uma referência direta e leve
-    const objectUrl = URL.createObjectURL(file);
-    
-    const img = new Image();
-    img.onload = function() {
-        // 1. Libera a memória da referência original imediatamente após o carregamento
-        URL.revokeObjectURL(objectUrl);
-
-        const canvas = document.createElement('canvas');
+    try {
         const MAX_WIDTH = 800;
-        
-        let width = img.width;
-        let height = img.height;
-        
-        // 2. Calcula a proporção apenas se a imagem for maior que o limite
-        if (width > MAX_WIDTH) {
-            height = Math.floor(height * (MAX_WIDTH / width));
-            width = MAX_WIDTH;
+
+        // Verifica se o navegador suporta a API moderna de decodificação
+        if (window.createImageBitmap) {
+            // A mágica acontece aqui: redimensiona ANTES de ir pra memória RAM
+            const imageBitmap = await createImageBitmap(file, {
+                resizeWidth: MAX_WIDTH,
+                resizeQuality: 'medium' // Equilibra qualidade e performance
+            });
+
+            const canvas = document.createElement('canvas');
+            canvas.width = imageBitmap.width;
+            canvas.height = imageBitmap.height;
+            const ctx = canvas.getContext('2d');
+            
+            // Desenha a imagem já reduzida
+            ctx.drawImage(imageBitmap, 0, 0);
+
+            currentDraft.image = canvas.toDataURL('image/jpeg', 0.6);
+
+            // Limpeza super agressiva de memória
+            canvas.width = 0;
+            canvas.height = 0;
+            imageBitmap.close(); // Função nativa para liberar a RAM imediatamente
+            
+            fetchLocationAndProceed();
+
+        } else {
+            // FALLBACK: Para celulares muito antigos que não suportam createImageBitmap
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
+            
+            img.onload = function() {
+                URL.revokeObjectURL(objectUrl);
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > MAX_WIDTH) {
+                    height = Math.floor(height * (MAX_WIDTH / width));
+                    width = MAX_WIDTH;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                currentDraft.image = canvas.toDataURL('image/jpeg', 0.6);
+                
+                canvas.width = 0; 
+                canvas.height = 0;
+                fetchLocationAndProceed();
+            };
+            img.src = objectUrl;
         }
 
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        // 3. Salva a versão já reduzida (compressão de 60% é ideal para web)
-        currentDraft.image = canvas.toDataURL('image/jpeg', 0.6);
-        
-        // 4. Força a limpeza do canvas para ajudar o coletor de lixo do navegador
-        canvas.width = 0;
-        canvas.height = 0;
-
-        fetchLocationAndProceed();
-    };
-    
-    img.onerror = function() {
-        alert("Erro ao processar a foto. Tente tirar a foto novamente.");
-        URL.revokeObjectURL(objectUrl);
-    };
-
-    img.src = objectUrl;
+    } catch (error) {
+        console.error("Erro ao decodificar a imagem:", error);
+        alert("Não foi possível processar a foto devido à memória do aparelho. Tente afastar um pouco a câmera ou usar uma resolução menor.");
+    }
 }
-
 const camInp = document.getElementById('camera-input');
 if(camInp) camInp.addEventListener('change', handleImageSelection);
 
