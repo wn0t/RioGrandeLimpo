@@ -212,10 +212,26 @@ if(camInp) camInp.addEventListener('change', handleImageSelection);
 
 async function getRealAddress(lat, lng) {
     try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+        // Adicionamos accept-language=pt-br para garantir os nomes corretos
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=pt-br`);
         const data = await response.json();
-        return data.address?.road || "Área Urbana";
-    } catch (error) { return `Coordenadas obtidas`; }
+        
+        if (data && data.address) {
+            // Busca a rua, avenida ou via de pedestre
+            const rua = data.address.road || data.address.pedestrian || data.address.path || "Via não identificada";
+            
+            // Busca o número (se a API conseguir identificar a casa/lote exato)
+            const numero = data.address.house_number ? `, ${data.address.house_number}` : "";
+            
+            // Busca o bairro para dar mais contexto à prefeitura
+            const bairro = data.address.suburb || data.address.city_district || data.address.neighbourhood ? ` - ${data.address.suburb || data.address.city_district || data.address.neighbourhood}` : "";
+            
+            return `${rua}${numero}${bairro}`;
+        }
+        return "Área Urbana";
+    } catch (error) { 
+        return "Coordenadas obtidas"; 
+    }
 }
 
 function fetchLocationAndProceed() {
@@ -231,9 +247,12 @@ function fetchLocationAndProceed() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
-                currentDraft.lat = position.coords.latitude.toFixed(4);
-                currentDraft.lng = position.coords.longitude.toFixed(4);
+                // Removemos o toFixed(4) para passar a precisão máxima do celular para a API
+                currentDraft.lat = position.coords.latitude;
+                currentDraft.lng = position.coords.longitude;
+                
                 currentDraft.address = await getRealAddress(currentDraft.lat, currentDraft.lng);
+                
                 if (coordsText) coordsText.innerText = currentDraft.address;
             },
             () => { if (coordsText) coordsText.innerText = "GPS bloqueado."; },
