@@ -243,3 +243,28 @@ body { background-color: #cbd5e1; display: flex; justify-content: center; align-
 }
 
 .dev-list li:last-child { border-bottom: none; }
+/* --- ESTILOS DAS ABAS --- */
+.tabs-container { 
+    display: flex; 
+    background: #e2e8f0; 
+    border-radius: 12px; 
+    padding: 4px; 
+    margin-bottom: 16px; 
+}
+.tab-btn { 
+    flex: 1; 
+    padding: 10px; 
+    border: none; 
+    background: transparent; 
+    border-radius: 8px; 
+    font-size: 14px; 
+    font-weight: 700; 
+    color: var(--text-muted); 
+    cursor: pointer; 
+    transition: 0.2s; 
+}
+.tab-btn.active { 
+    background: var(--white); 
+    color: var(--text-main); 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+}

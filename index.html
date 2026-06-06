@@ -17,7 +17,7 @@
    <div id="login-view" class="view login-bg" style="padding: 40px 24px; justify-content: flex-start;">
         <img src="icns/Logo.png" alt="Logo Natureza Limpa" style="width: 64px; height: 64px; margin-top: 10px; margin-bottom: 24px; filter: drop-shadow(0 8px 10px rgba(16, 185, 129, 0.4)); object-fit: contain; display: block;">
         
-        <h1 class="login-title">Mantenha Rio Grande<br><span>Limpo.</span></h1>
+        <h1 class="login-title">MantenhaㅤㅤㅤㅤRio Grande<br><span>Limpo.</span></h1>
         <p class="login-subtitle">Denuncie o descarte ilegal de lixo instantaneamente e ajude Rio Grande a manter belos espaços públicos.</p>
         
         <div class="institutional-support">
@@ -66,15 +66,21 @@
             <p class="impact-label">Seu Impacto</p>
             <div class="impact-number"><span id="impact-count">1</span> <span class="impact-text">denúncias resolvidas</span></div>
             
-            <button id="home-report-btn" class="btn-white-action" onclick="openCamera()">
+            <button id="home-report-btn" class="btn-white-action" onclick="startReport()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-                Denunciar Lixo Agora
+                <span id="report-btn-text">Denunciar Lixo Agora</span>
             </button>
         </div>
 
         <div class="list-header-v2">
             <h3>Denúncias Recentes</h3>
             <span class="link-text-v2" onclick="clearData()">Limpar Dados</span>
+        </div>
+
+        <!-- ABAS DE LIXO E ANIMAIS MORTOS -->
+        <div class="tabs-container">
+            <button class="tab-btn active" id="tab-lixo" onclick="switchTab('lixo')">Lixo</button>
+            <button class="tab-btn" id="tab-animal" onclick="switchTab('animal')">Animais Mortos</button>
         </div>
 
         <div id="reports-list"></div>
@@ -265,7 +271,7 @@
             <span>Início</span>
         </div>
         
-        <div id="nav-fab-btn" class="nav-fab" onclick="openCamera()">
+        <div id="nav-fab-btn" class="nav-fab" onclick="startReport()">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </div>
 
@@ -277,6 +283,6 @@
 
 </div>
 
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

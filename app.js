@@ -1,52 +1,78 @@
-// --- ESTADO DO APLICATIVO ---
-let appData = null;
+// --- IMPORTAÇÕES DO FIREBASE (Via CDN para rodar direto no GitHub Pages) ---
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// Tenta carregar os dados. Se houver algum erro grave no cache antigo, ele ignora.
-try {
-    appData = JSON.parse(localStorage.getItem('naturezaLimpaData'));
-} catch (error) {
-    appData = null;
-}
+// --- CONFIGURAÇÕES DE API ---
+const firebaseConfig = {
+  apiKey: "AIzaSyB5QjUTHARL1AureLXVeVIS296lWkiiptE",
+  authDomain: "rio-grande-limpo.firebaseapp.com",
+  projectId: "rio-grande-limpo",
+  storageBucket: "rio-grande-limpo.firebasestorage.app",
+  messagingSenderId: "396480806107",
+  appId: "1:396480806107:web:052a71e8e5421f1cece0fe",
+  measurementId: "G-Q53T8SZHH6"
+};
 
-if (!appData || !appData.reports || appData.reports.length === 0) {
-    appData = {
-        reports: [
-            {
-                id: 2,
-                image: 'https://www.olitoraneo.com.br/arquivos/noticias/21150/acumulo-de-lixo-domiciliar-causa-transtornos-nas-ruas-do-rio-grande.jpeg',
-                address: 'Avenida Pelotas',
-                description: 'Acúmulo de lixo domiciliar causando transtornos na calçada.',
-                status: 'Em Andamento',
-                date: new Date().toLocaleDateString('pt-BR'),
-                time: 'Agora mesmo'
-            },
-            {
-                id: 1,
-                image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTYtQh1AL8TvrxrTmht57L4kqXXBzHx7jhQ8g&',
-                address: 'Praia do Cassino',
-                description: 'Lixo espalhado pela areia da praia.',
-                status: 'Coletado',
-                date: new Date(Date.now() - 172800000).toLocaleDateString('pt-BR'),
-                time: 'Há 2 dias'
-            }
-        ],
-        points: 50,
-        resolvedCount: 1,
-        username: 'Michael',
-        isLoggedIn: false, 
-        isAdmin: false
-    };
-    localStorage.setItem('naturezaLimpaData', JSON.stringify(appData));
-}
+const IMGBB_API_KEY = "8075bbcc7d168746185128114baf4af9";
 
-if (!appData.reports) appData.reports = [];
+// Inicializa os serviços
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-let currentDraft = { image: null, lat: null, lng: null, address: '', description: '' };
+// --- ESTADO LOCAL DO APLICATIVO ---
+let appData = {
+    reports: [],
+    points: 0,
+    resolvedCount: 0,
+    username: 'Cidadão',
+    isLoggedIn: false, 
+    isAdmin: false
+};
+
+let currentTab = 'lixo';
+let currentDraft = { type: 'lixo', image: null, lat: null, lng: null, address: '', description: '' };
+
+// --- OBSERVADOR DE TEMPO REAL DO FIREBASE ---
+// Toda vez que alguém adicionar uma denúncia, isso aqui roda sozinho e atualiza a tela
+const q = query(collection(db, "reports"), orderBy("timestamp", "desc"));
+onSnapshot(q, (snapshot) => {
+    appData.reports = [];
+    appData.resolvedCount = 0;
+    appData.points = 0;
+    
+    snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        data.id = docSnap.id; // O ID agora é uma string real do banco de dados
+        
+        if (data.status === 'Coletado' || data.status === 'Concluído') appData.resolvedCount++;
+        if (auth.currentUser && data.userId === auth.currentUser.uid) appData.points += 50;
+        
+        appData.reports.push(data);
+    });
+    
+    updateUI();
+});
+
+// Observador de Login
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        appData.isLoggedIn = true;
+        appData.username = user.email.split('@')[0];
+        appData.username = appData.username.charAt(0).toUpperCase() + appData.username.slice(1);
+        appData.isAdmin = user.email === 'admin@riogrande.rs.gov.br';
+        navigate('home-view', 'nav-home');
+    } else {
+        appData.isLoggedIn = false;
+        navigate('login-view');
+    }
+});
 
 // --- NAVEGAÇÃO E LOGIN ---
 const viewsWithNavbar = ['home-view', 'profile-view'];
 
-function navigate(viewId, navItemId = null) {
+window.navigate = function(viewId, navItemId = null) {
     document.querySelectorAll('.view').forEach(view => {
         view.classList.remove('active');
         view.style.display = 'none';
@@ -59,9 +85,7 @@ function navigate(viewId, navItemId = null) {
     }
 
     const navbar = document.getElementById('global-navbar');
-    if (navbar) {
-        navbar.style.display = viewsWithNavbar.includes(viewId) ? 'flex' : 'none';
-    }
+    if (navbar) navbar.style.display = viewsWithNavbar.includes(viewId) ? 'flex' : 'none';
 
     if (navItemId) {
         document.querySelectorAll('.nav-item-v2').forEach(item => item.classList.remove('active'));
@@ -69,55 +93,61 @@ function navigate(viewId, navItemId = null) {
         if (activeNav) activeNav.classList.add('active');
     }
 
-    if (viewId === 'home-view' || viewId === 'profile-view') {
-        updateUI();
-    }
+    if (viewId === 'home-view' || viewId === 'profile-view') updateUI();
 }
 
-function handleLogin() {
+window.handleLogin = async function() {
     const inputEl = document.getElementById('login-username');
-    let inputValue = inputEl ? inputEl.value.trim() : 'Cidadão';
+    const passEl = document.querySelector('input[type="password"]');
+    const btn = document.querySelector('.login-btn');
     
-    let isAdmin = false;
+    let email = inputEl ? inputEl.value.trim() : 'cidadao';
+    let password = passEl && passEl.value ? passEl.value : '123456';
+    
+    if (!email.includes('@')) email = `${email.toLowerCase()}@riogrande.rs.gov.br`;
 
-    // Detecta se é o e-mail fictício de administrador
-    if (inputValue.toLowerCase() === 'admin@riogrande.rs.gov.br' || inputValue.toLowerCase() === 'admin') {
-        isAdmin = true;
-        inputValue = 'Administrador (Prefeitura)';
-    } else {
-        if (inputValue.includes('@')) {
-            inputValue = inputValue.split('@')[0];
-            inputValue = inputValue.charAt(0).toUpperCase() + inputValue.slice(1);
+    btn.innerText = "Autenticando...";
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+        // Se a conta não existe, cria na hora
+        try {
+            await createUserWithEmailAndPassword(auth, email, password);
+        } catch (e) {
+            alert("Erro ao entrar: " + e.message);
+            btn.innerText = "Entrar";
         }
     }
-    
-    if (inputValue === '') inputValue = 'Cidadão';
-
-    appData.username = inputValue;
-    appData.isLoggedIn = true; 
-    appData.isAdmin = isAdmin;
-    
-    localStorage.setItem('naturezaLimpaData', JSON.stringify(appData));
-    navigate('home-view', 'nav-home'); // Correção do ícone de casinha
 }
 
-function logout() {
-    appData.isLoggedIn = false;
-    localStorage.setItem('naturezaLimpaData', JSON.stringify(appData));
-    navigate('login-view');
+window.logout = function() {
+    signOut(auth);
 }
 
-// --- CÂMERA, COMPRESSÃO DE IMAGEM E GPS ---
-function openCamera() { 
+// --- CONTROLE DE ABAS ---
+window.switchTab = function(tab) {
+    currentTab = tab;
+    document.getElementById('tab-lixo').classList.remove('active');
+    document.getElementById('tab-animal').classList.remove('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    
+    const btnText = document.getElementById('report-btn-text');
+    if (btnText) btnText.innerText = tab === 'lixo' ? 'Denunciar Lixo Agora' : 'Reportar Animal Morto';
+    
+    updateUI();
+}
+
+window.startReport = function() {
+    if(appData.isAdmin) return;
+    currentDraft.type = currentTab;
+    openCamera();
+}
+
+// --- CÂMERA E GPS ---
+window.openCamera = function() { 
     if(appData.isAdmin) return;
     const camInput = document.getElementById('camera-input');
     if (camInput) camInput.click(); 
-}
-
-function openGallery() { 
-    if(appData.isAdmin) return;
-    const galInput = document.getElementById('gallery-input');
-    if (galInput) galInput.click(); 
 }
 
 function handleImageSelection(e) {
@@ -133,7 +163,6 @@ function handleImageSelection(e) {
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = MAX_WIDTH;
             canvas.height = img.height * scaleSize;
-
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
@@ -146,21 +175,14 @@ function handleImageSelection(e) {
 }
 
 const camInp = document.getElementById('camera-input');
-const galInp = document.getElementById('gallery-input');
 if(camInp) camInp.addEventListener('change', handleImageSelection);
-if(galInp) galInp.addEventListener('change', handleImageSelection);
 
 async function getRealAddress(lat, lng) {
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
         const data = await response.json();
-        if (data.address) {
-            return data.address.road || "Área Urbana";
-        }
-        return "Local não identificado";
-    } catch (error) {
-        return `Coordenadas obtidas`;
-    }
+        return data.address?.road || "Área Urbana";
+    } catch (error) { return `Coordenadas obtidas`; }
 }
 
 function fetchLocationAndProceed() {
@@ -178,65 +200,80 @@ function fetchLocationAndProceed() {
             async (position) => {
                 currentDraft.lat = position.coords.latitude.toFixed(4);
                 currentDraft.lng = position.coords.longitude.toFixed(4);
-                const realAddress = await getRealAddress(currentDraft.lat, currentDraft.lng);
-                currentDraft.address = realAddress;
-                if (coordsText) coordsText.innerText = realAddress;
+                currentDraft.address = await getRealAddress(currentDraft.lat, currentDraft.lng);
+                if (coordsText) coordsText.innerText = currentDraft.address;
             },
-            (error) => { if (coordsText) coordsText.innerText = "GPS bloqueado ou negado."; },
+            () => { if (coordsText) coordsText.innerText = "GPS bloqueado."; },
             { enableHighAccuracy: true, timeout: 10000 }
         );
-    } else {
-        if (coordsText) coordsText.innerText = "GPS não suportado.";
     }
 }
 
-// --- ENVIAR DENÚNCIA ---
-function submitReport() {
-    const descInput = document.getElementById('review-desc');
-    currentDraft.description = descInput ? descInput.value : "Sem descrição";
-    if (!currentDraft.description.trim()) currentDraft.description = "Sem descrição";
+// --- ENVIAR DENÚNCIA PARA NUVEM ---
+window.submitReport = async function() {
+    const btn = document.querySelector('#review-view .btn');
+    const originalText = btn.innerText;
+    btn.innerText = "⏳ Enviando e processando...";
+    btn.style.pointerEvents = "none";
+    btn.style.opacity = "0.7";
 
-    const newReport = {
-        id: Date.now(),
-        image: currentDraft.image,
-        address: currentDraft.address || "Área Urbana",
-        description: currentDraft.description,
-        status: 'Em Andamento',
-        date: new Date().toLocaleDateString('pt-BR'),
-        time: 'Agora mesmo'
-    };
+    try {
+        const descInput = document.getElementById('review-desc');
+        currentDraft.description = descInput ? descInput.value : "Sem descrição";
 
-    appData.reports.unshift(newReport);
-    appData.points = (appData.points || 0) + 50; 
-    localStorage.setItem('naturezaLimpaData', JSON.stringify(appData));
+        // 1. Envia a foto pro ImgBB
+        const base64Data = currentDraft.image.split(',')[1];
+        const formData = new FormData();
+        formData.append("image", base64Data);
 
-    if (descInput) descInput.value = '';
-    if (camInp) camInp.value = '';
-    if (galInp) galInp.value = '';
-    
-    navigate('success-view');
-}
+        const imgbbRes = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+            method: "POST",
+            body: formData
+        });
+        const imgbbData = await imgbbRes.json();
+        const imageUrl = imgbbData.data.url;
 
-function updateReportStatus(reportId, newStatus) {
-    const report = appData.reports.find(r => r.id === reportId);
-    if (!report) return;
+        // 2. Salva os dados no banco do Firebase
+        await addDoc(collection(db, "reports"), {
+            type: currentDraft.type || 'lixo',
+            image: imageUrl,
+            address: currentDraft.address || "Área Urbana",
+            description: currentDraft.description,
+            status: 'Em Andamento',
+            date: new Date().toLocaleDateString('pt-BR'),
+            time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            timestamp: Date.now(),
+            userId: auth.currentUser ? auth.currentUser.uid : 'anonimo'
+        });
 
-    report.status = newStatus;
-    
-    if (newStatus === 'Coletado') {
-        report.time = 'Resolvido agora';
-        appData.resolvedCount = (appData.resolvedCount || 0) + 1;
-    } else {
-        report.time = 'Atualizado agora';
+        if (descInput) descInput.value = '';
+        currentDraft.image = null;
+        navigate('success-view');
+
+    } catch (error) {
+        alert("Falha de rede ao enviar denúncia. Tente novamente.");
+        console.error(error);
+    } finally {
+        btn.innerText = originalText;
+        btn.style.pointerEvents = "auto";
+        btn.style.opacity = "1";
     }
-
-    localStorage.setItem('naturezaLimpaData', JSON.stringify(appData));
-    
-    showReportDetails(reportId);
-    updateUI();
 }
 
-function showReportDetails(reportId) {
+window.updateReportStatus = async function(reportId, newStatus) {
+    try {
+        const timeText = newStatus === 'Coletado' ? 'Resolvido agora' : 'Atualizado agora';
+        await updateDoc(doc(db, "reports", reportId), {
+            status: newStatus,
+            time: timeText
+        });
+        navigate('home-view', 'nav-home');
+    } catch(e) {
+        alert("Erro ao atualizar status.");
+    }
+}
+
+window.showReportDetails = function(reportId) {
     const report = appData.reports.find(r => r.id === reportId);
     if (!report) return;
 
@@ -257,8 +294,8 @@ function showReportDetails(reportId) {
         if (appData.isAdmin) {
             adminBox.style.display = 'flex';
             adminBox.innerHTML = `
-                <button class="btn btn-admin-done" onclick="updateReportStatus(${report.id}, 'Coletado')">✓ Marcar como Limpo</button>
-                <button class="btn btn-admin-progress" onclick="updateReportStatus(${report.id}, 'Em Andamento')">⚡ Reabrir / Em Andamento</button>
+                <button class="btn btn-admin-done" onclick="updateReportStatus('${report.id}', 'Coletado')">✓ Marcar como Limpo</button>
+                <button class="btn btn-admin-progress" onclick="updateReportStatus('${report.id}', 'Em Andamento')">⚡ Reabrir / Em Andamento</button>
             `;
         } else {
             adminBox.style.display = 'none';
@@ -268,7 +305,7 @@ function showReportDetails(reportId) {
     navigate('details-view');
 }
 
-// --- RENDERIZAR TELA COM TRAVAS DE SEGURANÇA ---
+// --- RENDERIZAÇÃO DA UI ---
 function updateUI() {
     const homeName = document.getElementById('home-username-display');
     const profName = document.getElementById('profile-username-display');
@@ -283,197 +320,111 @@ function updateUI() {
     if (profPoints) profPoints.innerText = appData.points || 0;
     if (profResolved) profResolved.innerText = appData.resolvedCount || 0;
     
-    // Esconder botões de denúncia se for administrador
     const homeReportBtn = document.getElementById('home-report-btn');
     const navFabBtn = document.getElementById('nav-fab-btn');
     
     if (appData.isAdmin) {
         if (homeReportBtn) homeReportBtn.style.display = 'none';
-        if (navFabBtn) {
-            navFabBtn.style.visibility = 'hidden'; 
-            navFabBtn.style.pointerEvents = 'none';
-        }
+        if (navFabBtn) { navFabBtn.style.visibility = 'hidden'; navFabBtn.style.pointerEvents = 'none'; }
     } else {
         if (homeReportBtn) homeReportBtn.style.display = 'flex';
-        if (navFabBtn) {
-            navFabBtn.style.visibility = 'visible';
-            navFabBtn.style.pointerEvents = 'auto';
-        }
+        if (navFabBtn) { navFabBtn.style.visibility = 'visible'; navFabBtn.style.pointerEvents = 'auto'; }
     }
 
     if (!listContainer) return;
     listContainer.innerHTML = '';
 
-    if (!appData.reports || appData.reports.length === 0) {
-        listContainer.innerHTML = '<p style="text-align:center; color:#64748b; font-size:15px; margin-top:32px;">Nenhuma denúncia recente.</p>';
+    const filteredReports = appData.reports.filter(r => r.type === currentTab || (!r.type && currentTab === 'lixo'));
+
+    if (filteredReports.length === 0) {
+        listContainer.innerHTML = '<p style="text-align:center; color:#64748b; font-size:15px; margin-top:32px;">Nenhum registro encontrado nesta categoria.</p>';
         return;
     }
 
-    appData.reports.forEach(report => {
-        if (!report) return;
-
+    filteredReports.forEach(report => {
         const isDone = (report.status === 'Coletado' || report.status === 'Concluído');
         const badgeClass = isDone ? 'done' : 'progress';
         const checkIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
         const clockIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-        const badgeIcon = isDone ? checkIcon : clockIcon;
-
-        const safeAddress = report.address || "Local não informado";
-        const shortAddress = safeAddress.split(',')[0];
         
-        const displayTime = report.time || report.date || "Sem data";
-        const safeImage = report.image || "";
-
-        const itemHtml = `
-            <div class="report-card" onclick="showReportDetails(${report.id})">
-                <div class="report-img-v2" style="background-image: url('${safeImage}');"></div>
+        // Cuidado com aspas ao redor do ID na função onclick agora que o ID é texto
+        listContainer.insertAdjacentHTML('beforeend', `
+            <div class="report-card" onclick="showReportDetails('${report.id}')">
+                <div class="report-img-v2" style="background-image: url('${report.image || ''}');"></div>
                 <div class="report-info-v2">
                     <div class="report-header-row">
-                        <span class="badge ${badgeClass}">${badgeIcon} ${report.status || "Em Andamento"}</span>
-                        <span class="report-time">${displayTime}</span>
+                        <span class="badge ${badgeClass}">${isDone ? checkIcon : clockIcon} ${report.status || "Em Andamento"}</span>
+                        <span class="report-time">${report.time || report.date}</span>
                     </div>
-                    <h4>${shortAddress}</h4>
-                    <p style="display:flex; align-items:center; gap:4px; font-size:12px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Área Urbana</p>
+                    <h4>${(report.address || "Local não informado").split(',')[0]}</h4>
+                    <p style="display:flex; align-items:center; gap:4px; font-size:12px;">Área Urbana</p>
                 </div>
             </div>
-        `;
-        listContainer.insertAdjacentHTML('beforeend', itemHtml);
+        `);
     });
 }
 
-function clearData() {
-    if(confirm("Apagar todas as denúncias? Isso resetará o app com os exemplos padrão.")) {
-        localStorage.removeItem('naturezaLimpaData');
-        appData = null;
-        navigate('login-view');
-        setTimeout(() => window.location.reload(), 100);
-    }
+// Utilitários de UI
+window.showNotification = function() {
+    alert(appData.isAdmin ? "🔔 SISTEMA: Denúncias ativas sincronizadas." : "🔔 SUCESSO: Tudo sincronizado na nuvem!");
 }
 
-function showNotification() {
-    if (appData && appData.isAdmin) {
-        alert("🔔 SISTEMA: Existem novas denúncias de lixo na sua cidade aguardando a equipe de coleta.");
-    } else {
-        alert("🔔 SUCESSO: A prefeitura limpou recentemente um local que havia sido reportado pela comunidade. Continue ajudando!");
-    }
-}
-
-// --- MODAL DE DESENVOLVEDORES ---
-function openDevModal() {
-    const modal = document.getElementById('dev-modal');
-    if (modal) modal.style.display = 'flex';
-}
-
-function closeDevModal() {
-    const modal = document.getElementById('dev-modal');
-    if (modal) modal.style.display = 'none';
-}
-
-// Iniciação
-if (appData && appData.isLoggedIn) {
-    navigate('home-view', 'nav-home'); // Correção do ícone de casinha
-} else {
-    navigate('login-view');
-}
+window.openDevModal = function() { document.getElementById('dev-modal').style.display = 'flex'; }
+window.closeDevModal = function() { document.getElementById('dev-modal').style.display = 'none'; }
+window.openColetaModal = function() { document.getElementById('coleta-modal').style.display = 'flex'; }
+window.closeColetaModal = function() { document.getElementById('coleta-modal').style.display = 'none'; }
 
 // ==========================================
-// --- MÓDULO DE COLETA SELETIVA ---
+// --- MÓDULO DE COLETA SELETIVA (MANTIDO)---
 // ==========================================
-
 const coletaData = [
     { dia: 'Segunda-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'Povo Novo', 'Sítio Santa Cruz'] },
     { dia: 'Segunda-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Barra', 'Cohab IV', 'Castelo Branco', 'Centro Secundário', 'Rua Benjamin Constant até Alm. Barroso'] },
-    
     { dia: 'Terça-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'BGV', 'Vila Militar', 'Santa Tereza', 'Navegantes', 'Lar Gaúcho', 'Salgado Filho', 'Mangueira'] },
     { dia: 'Terça-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Cassino', 'ABC Loteamento Otero', 'Vila São Jorge', 'Parque Universitário', 'Humaitá', 'Aeroporto', 'Vila Maria José', 'Marluz'] },
-    
     { dia: 'Quarta-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'Miguel de Castro Moreira', 'Lagoa', 'Cohab II', 'Cidade Nova'] },
     { dia: 'Quarta-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Frederico Ernesto Buchholz', 'Rural', 'Municipal', 'Hidráulica', 'Bernadeth', 'Parque Coelho', 'Vila Dias', 'Vila São Paulo'] },
-    
     { dia: 'Quinta-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'São Miguel', 'São João', 'Profilurb', 'Vila Recreio', 'Vila Braz', 'Junção', 'América'] },
     { dia: 'Quinta-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Santa Rosa', 'Central Park', 'Jardim do Sol', 'Parque Marinha'] },
-    
     { dia: 'Sexta-feira', turno: 'Manhã (7h30 às 11h30)', bairros: ['Centro Comercial', 'Rua Cristóvão Colombo', 'Cassino', 'Av. Rio Grande até Jorge do Campos'] },
     { dia: 'Sexta-feira', turno: 'Tarde (13h30 às 17h30)', bairros: ['Querência', 'Parque Cassino', 'Parque Guanabara', 'Av. Rio Grande até Luiz Leivas Otero'] },
-    
     { dia: 'Sábado', turno: 'Manhã (7h30 às 11h30)', bairros: ['Parque São Pedro', 'Senandes', 'Greenvilage', 'Boa Vista I e II', 'Vila Alfa', 'Bolacha', 'Cassino', 'Horto'] }
 ];
 
-function populateBairrosDropdown() {
+setTimeout(() => {
     const select = document.getElementById('bairro-select');
     if (!select) return;
-    
     let todosBairros = new Set();
     coletaData.forEach(item => item.bairros.forEach(b => todosBairros.add(b)));
-    
-    // Organiza os bairros em ordem alfabética no Select
-    let bairrosArray = Array.from(todosBairros).sort((a, b) => a.localeCompare(b));
-    bairrosArray.forEach(bairro => {
+    Array.from(todosBairros).sort((a, b) => a.localeCompare(b)).forEach(bairro => {
         let opt = document.createElement('option');
-        opt.value = bairro;
-        opt.textContent = bairro;
+        opt.value = opt.textContent = bairro;
         select.appendChild(opt);
     });
-}
+}, 300);
 
-function renderColeta(filterBairro = 'todos') {
+window.filterColeta = function() {
+    const val = document.getElementById('bairro-select').value;
     const resultsDiv = document.getElementById('coleta-results');
-    if (!resultsDiv) return;
     resultsDiv.innerHTML = '';
+    let found = false;
 
-    if (filterBairro === 'todos') {
-        const dias = [...new Set(coletaData.map(d => d.dia))];
-        dias.forEach(dia => {
-            let html = `<div style="margin-bottom: 24px;">
-                            <h4 style="color: var(--primary-dark); font-size: 18px; margin-bottom: 12px; font-weight: 800;">${dia}</h4>`;
-            
+    if (val === 'todos') {
+        found = true;
+        [...new Set(coletaData.map(d => d.dia))].forEach(dia => {
+            let html = `<div style="margin-bottom: 24px;"><h4 style="color: var(--primary-dark); font-size: 18px; margin-bottom: 12px; font-weight: 800;">${dia}</h4>`;
             coletaData.filter(d => d.dia === dia).forEach(turno => {
-                html += `<div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                            <strong style="font-size: 14px; color: var(--text-main); display: block; margin-bottom: 8px;">${turno.turno}</strong>
-                            <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;">${turno.bairros.join(', ')}</p>
-                         </div>`;
+                html += `<div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);"><strong style="font-size: 14px; color: var(--text-main); display: block; margin-bottom: 8px;">${turno.turno}</strong><p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;">${turno.bairros.join(', ')}</p></div>`;
             });
-            html += `</div>`;
-            resultsDiv.innerHTML += html;
+            resultsDiv.innerHTML += html + `</div>`;
         });
     } else {
-        // Exibir apenas o dia/turno que corresponda ao bairro selecionado
-        let found = false;
         coletaData.forEach(item => {
-            if (item.bairros.includes(filterBairro)) {
+            if (item.bairros.includes(val)) {
                 found = true;
-                resultsDiv.innerHTML += `
-                    <div style="background: var(--primary-light); padding: 20px; border-radius: 16px; margin-bottom: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                        <h4 style="color: var(--primary-dark); font-size: 18px; margin-bottom: 8px; font-weight: 800;">${item.dia}</h4>
-                        <strong style="font-size: 15px; color: var(--primary-dark); display: block;">${item.turno}</strong>
-                    </div>
-                `;
+                resultsDiv.innerHTML += `<div style="background: var(--primary-light); padding: 20px; border-radius: 16px; margin-bottom: 12px; border: 1px solid rgba(16, 185, 129, 0.3);"><h4 style="color: var(--primary-dark); font-size: 18px; margin-bottom: 8px; font-weight: 800;">${item.dia}</h4><strong style="font-size: 15px; color: var(--primary-dark); display: block;">${item.turno}</strong></div>`;
             }
         });
-        if (!found) {
-            resultsDiv.innerHTML = `<p style="font-size: 14px; color: var(--text-muted); text-align: center; margin-top: 32px;">Nenhum horário encontrado para este bairro.</p>`;
-        }
     }
+    if (!found) resultsDiv.innerHTML = `<p style="font-size: 14px; color: var(--text-muted); text-align: center; margin-top: 32px;">Nenhum horário encontrado para este bairro.</p>`;
 }
-
-function openColetaModal() {
-    const modal = document.getElementById('coleta-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-        document.getElementById('bairro-select').value = 'todos'; // Reseta sempre pra todos
-        renderColeta('todos');
-    }
-}
-
-function closeColetaModal() {
-    const modal = document.getElementById('coleta-modal');
-    if (modal) modal.style.display = 'none';
-}
-
-function filterColeta() {
-    const val = document.getElementById('bairro-select').value;
-    renderColeta(val);
-}
-
-// Inicializar preenchimento da caixa de bairros
-setTimeout(populateBairrosDropdown, 300);
