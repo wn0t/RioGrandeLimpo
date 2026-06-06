@@ -35,7 +35,6 @@ let currentTab = 'lixo';
 let currentDraft = { type: 'lixo', image: null, lat: null, lng: null, address: '', description: '' };
 
 // --- OBSERVADOR DE TEMPO REAL DO FIREBASE ---
-// Toda vez que alguém adicionar uma denúncia, isso aqui roda sozinho e atualiza a tela
 const q = query(collection(db, "reports"), orderBy("timestamp", "desc"));
 onSnapshot(q, (snapshot) => {
     appData.reports = [];
@@ -44,7 +43,7 @@ onSnapshot(q, (snapshot) => {
     
     snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        data.id = docSnap.id; // O ID agora é uma string real do banco de dados
+        data.id = docSnap.id; 
         
         if (data.status === 'Coletado' || data.status === 'Concluído') appData.resolvedCount++;
         if (auth.currentUser && data.userId === auth.currentUser.uid) appData.points += 50;
@@ -52,7 +51,9 @@ onSnapshot(q, (snapshot) => {
         appData.reports.push(data);
     });
     
-    updateUI();
+    if (appData.isLoggedIn) {
+        updateUI();
+    }
 });
 
 // Observador de Login
@@ -61,15 +62,17 @@ onAuthStateChanged(auth, (user) => {
         appData.isLoggedIn = true;
         appData.username = user.email.split('@')[0];
         appData.username = appData.username.charAt(0).toUpperCase() + appData.username.slice(1);
-        appData.isAdmin = user.email === 'admin@riogrande.rs.gov.br';
+        appData.isAdmin = user.email.toLowerCase() === 'admin@riogrande.rs.gov.br';
+        
         navigate('home-view', 'nav-home');
     } else {
         appData.isLoggedIn = false;
+        appData.isAdmin = false;
         navigate('login-view');
     }
 });
 
-// --- NAVEGAÇÃO E LOGIN ---
+// --- NAVEGAÇÃO ---
 const viewsWithNavbar = ['home-view', 'profile-view'];
 
 window.navigate = function(viewId, navItemId = null) {
@@ -96,27 +99,57 @@ window.navigate = function(viewId, navItemId = null) {
     if (viewId === 'home-view' || viewId === 'profile-view') updateUI();
 }
 
+// --- AUTENTICAÇÃO ---
 window.handleLogin = async function() {
     const inputEl = document.getElementById('login-username');
-    const passEl = document.querySelector('input[type="password"]');
-    const btn = document.querySelector('.login-btn');
+    const passEl = document.querySelector('#login-view input[type="password"]');
+    const btn = document.querySelector('#login-view .login-btn');
     
-    let email = inputEl ? inputEl.value.trim() : 'cidadao';
-    let password = passEl && passEl.value ? passEl.value : '123456';
+    let email = inputEl ? inputEl.value.trim() : '';
+    let password = passEl ? passEl.value : '';
     
+    if (!email || !password) return alert("Preencha e-mail e senha!");
     if (!email.includes('@')) email = `${email.toLowerCase()}@riogrande.rs.gov.br`;
 
+    const originalText = btn.innerText;
     btn.innerText = "Autenticando...";
     try {
         await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-        // Se a conta não existe, cria na hora
-        try {
-            await createUserWithEmailAndPassword(auth, email, password);
-        } catch (e) {
-            alert("Erro ao entrar: " + e.message);
-            btn.innerText = "Entrar";
+        alert("Erro ao entrar. Verifique seu e-mail e senha ou cadastre-se.");
+    } finally {
+        btn.innerText = originalText;
+    }
+}
+
+window.handleRegister = async function() {
+    const emailEl = document.getElementById('reg-email');
+    const passEl = document.getElementById('reg-password');
+    const btn = document.querySelector('#register-view .login-btn');
+
+    let email = emailEl.value.trim();
+    let password = passEl.value;
+
+    if (!email || !password) return alert("Preencha todos os campos!");
+    if (password.length < 6) return alert("A senha deve ter pelo menos 6 caracteres.");
+    
+    // Trava de segurança: Ninguém pode criar a conta do admin pelo app
+    if (email.toLowerCase() === 'admin@riogrande.rs.gov.br') {
+        return alert("Não é permitido registrar este e-mail através do aplicativo.");
+    }
+
+    const originalText = btn.innerText;
+    btn.innerText = "Criando conta...";
+    try {
+        await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+        if(error.code === 'auth/email-already-in-use') {
+            alert("Este e-mail já está cadastrado! Tente fazer login.");
+        } else {
+            alert("Erro ao criar conta: " + error.message);
         }
+    } finally {
+        btn.innerText = originalText;
     }
 }
 
@@ -124,7 +157,7 @@ window.logout = function() {
     signOut(auth);
 }
 
-// --- CONTROLE DE ABAS ---
+// --- CONTROLE DE ABAS E DENÚNCIAS ---
 window.switchTab = function(tab) {
     currentTab = tab;
     document.getElementById('tab-lixo').classList.remove('active');
@@ -305,28 +338,35 @@ window.showReportDetails = function(reportId) {
     navigate('details-view');
 }
 
-// --- RENDERIZAÇÃO DA UI ---
+// --- RENDERIZAÇÃO DA UI (MÚLTIPLOS PERFIS) ---
 function updateUI() {
     const homeName = document.getElementById('home-username-display');
     const profName = document.getElementById('profile-username-display');
     const impactCount = document.getElementById('impact-count');
-    const profPoints = document.getElementById('profile-points');
-    const profResolved = document.getElementById('profile-resolved');
     const listContainer = document.getElementById('reports-list');
-
-    if (homeName) homeName.innerText = appData.username || 'Cidadão';
-    if (profName) profName.innerText = appData.username || 'Cidadão';
-    if (impactCount) impactCount.innerText = appData.resolvedCount || 0;
-    if (profPoints) profPoints.innerText = appData.points || 0;
-    if (profResolved) profResolved.innerText = appData.resolvedCount || 0;
     
+    // Elementos visuais que mudam dependendo de quem é o usuário
+    const greetingBox = document.querySelector('.greeting-text');
+    const impactCard = document.querySelector('.impact-card-v2');
     const homeReportBtn = document.getElementById('home-report-btn');
     const navFabBtn = document.getElementById('nav-fab-btn');
-    
+
     if (appData.isAdmin) {
+        // VISÃO ADMINISTRADOR
+        if (greetingBox) greetingBox.innerText = "Painel de Controle,";
+        if (homeName) homeName.innerText = "Prefeitura";
+        if (profName) profName.innerText = "Prefeitura Municipal";
+        if (impactCard) impactCard.style.display = 'none'; 
         if (homeReportBtn) homeReportBtn.style.display = 'none';
         if (navFabBtn) { navFabBtn.style.visibility = 'hidden'; navFabBtn.style.pointerEvents = 'none'; }
     } else {
+        // VISÃO CIDADÃO
+        if (greetingBox) greetingBox.innerText = "Bom Dia,";
+        if (homeName) homeName.innerText = appData.username || 'Cidadão';
+        if (profName) profName.innerText = appData.username || 'Cidadão';
+        if (impactCount) impactCount.innerText = appData.resolvedCount || 0;
+        
+        if (impactCard) impactCard.style.display = 'block';
         if (homeReportBtn) homeReportBtn.style.display = 'flex';
         if (navFabBtn) { navFabBtn.style.visibility = 'visible'; navFabBtn.style.pointerEvents = 'auto'; }
     }
@@ -347,7 +387,6 @@ function updateUI() {
         const checkIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
         const clockIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
         
-        // Cuidado com aspas ao redor do ID na função onclick agora que o ID é texto
         listContainer.insertAdjacentHTML('beforeend', `
             <div class="report-card" onclick="showReportDetails('${report.id}')">
                 <div class="report-img-v2" style="background-image: url('${report.image || ''}');"></div>
