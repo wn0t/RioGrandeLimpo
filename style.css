@@ -158,6 +158,22 @@ body { background-color: #cbd5e1; display: flex; justify-content: center; align-
 
 .nav-item-v2.active { color: var(--primary); }
 .nav-item-v2.active .nav-icon-v2 { opacity: 1; filter: invert(56%) sepia(54%) saturate(495%) hue-rotate(107deg) brightness(90%) contrast(89%); }
+/* Estilos para os Botões Administrativos */
+.btn-admin-done { 
+    background-color: #059669 !important; 
+    box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3) !important; 
+}
+
+.btn-admin-progress { 
+    background-color: #d97706 !important; 
+    box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.3) !important; 
+}
+
+.btn-admin-delete {
+    background-color: #ef4444 !important;
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3) !important;
+    margin-top: 12px;
+}
 
 .nav-fab {
     width: 64px; height: 64px; background: var(--primary); border-radius: 50%;
