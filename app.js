@@ -1,7 +1,7 @@
 // --- IMPORTAÇÕES DO FIREBASE (Via CDN para rodar direto no GitHub Pages) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES DE API ---
 const firebaseConfig = {
@@ -385,12 +385,13 @@ window.showReportDetails = function(reportId) {
     if (detDate) detDate.innerText = report.date || "";
 
     const adminBox = document.getElementById('admin-details-actions');
-    if (adminBox) {
+if (adminBox) {
         if (appData.isAdmin) {
             adminBox.style.display = 'flex';
             adminBox.innerHTML = `
                 <button class="btn btn-admin-done" onclick="updateReportStatus('${report.id}', 'Coletado')">✓ Marcar como Limpo</button>
                 <button class="btn btn-admin-progress" onclick="updateReportStatus('${report.id}', 'Em Andamento')">⚡ Reabrir / Em Andamento</button>
+                <button class="btn btn-admin-delete" onclick="deleteReport('${report.id}')">🗑 Excluir Denúncia</button>
             `;
         } else {
             adminBox.style.display = 'none';
@@ -529,3 +530,19 @@ window.filterColeta = function() {
     }
     if (!found) resultsDiv.innerHTML = `<p style="font-size: 14px; color: var(--text-muted); text-align: center; margin-top: 32px;">Nenhum horário encontrado para este bairro.</p>`;
 }
+// Função para o administrador excluir a denúncia
+window.deleteReport = async function(reportId) {
+    if(confirm("Tem certeza que deseja excluir esta denúncia permanentemente? Esta ação não pode ser desfeita.")) {
+        try {
+            await deleteDoc(doc(db, "reports", reportId));
+            navigate('home-view', 'nav-home');
+        } catch(e) {
+            alert("Erro ao excluir denúncia.");
+            console.error(e);
+        }
+    }
+}
+
+// Funções para controle do Modal de Ecopontos
+window.openEcopontosModal = function() { document.getElementById('ecopontos-modal').style.display = 'flex'; }
+window.closeEcopontosModal = function() { document.getElementById('ecopontos-modal').style.display = 'none'; }
