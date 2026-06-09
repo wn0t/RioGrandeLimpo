@@ -35,26 +35,8 @@ let currentTab = 'lixo';
 let currentDraft = { type: 'lixo', image: null, lat: null, lng: null, address: '', description: '' };
 
 // --- OBSERVADOR DE TEMPO REAL DO FIREBASE ---
-const q = query(collection(db, "reports"), orderBy("timestamp", "desc"));
-onSnapshot(q, (snapshot) => {
-    appData.reports = [];
-    appData.resolvedCount = 0;
-    appData.points = 0;
-    
-    snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        data.id = docSnap.id; 
-        
-        if (data.status === 'Coletado' || data.status === 'Concluído') appData.resolvedCount++;
-        if (auth.currentUser && data.userId === auth.currentUser.uid) appData.points += 50;
-        
-        appData.reports.push(data);
-    });
-    
-    if (appData.isLoggedIn) {
-        updateUI();
-    }
-});
+// Variável para guardar a conexão com o banco
+let unsubscribeReports = null;
 
 // Observador de Login
 onAuthStateChanged(auth, (user) => {
@@ -64,10 +46,41 @@ onAuthStateChanged(auth, (user) => {
         appData.username = appData.username.charAt(0).toUpperCase() + appData.username.slice(1);
         appData.isAdmin = user.email.toLowerCase() === 'admin@riogrande.rs.gov.br';
         
+        // --- INICIA A BUSCA SÓ DEPOIS DE CONFIRMAR O LOGIN ---
+        if (!unsubscribeReports) {
+            const q = query(collection(db, "reports"), orderBy("timestamp", "desc"));
+            unsubscribeReports = onSnapshot(q, (snapshot) => {
+                appData.reports = [];
+                appData.resolvedCount = 0;
+                appData.points = 0;
+                
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    data.id = docSnap.id; 
+                    
+                    if (data.status === 'Coletado' || data.status === 'Concluído') appData.resolvedCount++;
+                    if (auth.currentUser && data.userId === auth.currentUser.uid) appData.points += 50;
+                    
+                    appData.reports.push(data);
+                });
+                
+                updateUI();
+            }, (error) => {
+                console.error("Erro do Firebase ao buscar denúncias:", error);
+            });
+        }
+
         navigate('home-view', 'nav-home');
     } else {
         appData.isLoggedIn = false;
         appData.isAdmin = false;
+        
+        // --- DESLIGA A BUSCA SE O USUÁRIO SAIR DA CONTA ---
+        if (unsubscribeReports) {
+            unsubscribeReports();
+            unsubscribeReports = null;
+        }
+        
         navigate('login-view');
     }
 });
