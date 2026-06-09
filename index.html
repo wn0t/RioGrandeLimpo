@@ -165,6 +165,18 @@
                 </div>
                 <div class="menu-arrow">›</div>
             </div>
+            <div class="menu-item-card" onclick="openEcopontosModal()">
+                <div class="menu-icon-box" style="background: var(--primary-light);">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                </div>
+                <div class="menu-text">
+                    <h4>Ecopontos</h4>
+                    <span>Locais para descarte correto</span>
+                </div>
+                <div class="menu-arrow">›</div>
+            </div>
 
             <p class="menu-section-title" style="margin-top: 24px;">SUPORTE</p>
 
@@ -253,7 +265,46 @@
             <div id="coleta-results"></div>
         </div>
     </div>
+<div id="ecopontos-modal" class="custom-modal">
+        <div class="modal-content" style="max-height: 85vh; overflow-y: auto; text-align: left; padding: 24px;">
+            <span class="close-btn" onclick="closeEcopontosModal()">×</span>
+            <div class="flex-center" style="margin-bottom: 16px; gap: 12px; justify-content: flex-start;">
+                <div class="modal-icon" style="margin: 0; width: 48px; height: 48px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                </div>
+                <h3 style="margin: 0;">Ecopontos</h3>
+            </div>
+            
+            <div id="ecopontos-list">
+                <div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 15px; color: var(--primary-dark); display: block; margin-bottom: 4px;">1. Ecoponto Cassino (Depósito de Inertes)</strong>
+                    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;"><strong>Localização:</strong> Rua São Leopoldo, nº 628.<br><strong>Funcionamento:</strong> Todos os dias (de segunda a domingo), das 7h às 12h e das 13h às 18h.</p>
+                </div>
 
+                <div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 15px; color: var(--primary-dark); display: block; margin-bottom: 4px;">2. Estação de Lixo Diferenciado (Eletrônicos)</strong>
+                    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;"><strong>Localização:</strong> Rua Castro Alves, esquina com a Rua Buarque de Macedo.</p>
+                </div>
+
+                <div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 15px; color: var(--primary-dark); display: block; margin-bottom: 4px;">3. Ponto de Inservíveis da Hidráulica</strong>
+                    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;"><strong>Localização:</strong> Rua Castro Alves, esquina com a Rua Buarque de Macedo (Centro).</p>
+                </div>
+
+                <div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 15px; color: var(--primary-dark); display: block; margin-bottom: 4px;">4. Ponto de Inservíveis da Refinaria</strong>
+                    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;"><strong>Localização:</strong> Rua Dr. Álvaro Costa (em frente à Refinaria Rio Grandense).</p>
+                </div>
+
+                <div style="background: var(--white); padding: 16px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                    <strong style="font-size: 15px; color: var(--primary-dark); display: block; margin-bottom: 4px;">5. Estação Bota Fora Carreiros</strong>
+                    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5;"><strong>Localização:</strong> Carreiros.</p>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="navbar-v2" id="global-navbar" style="display: none;">
         <div class="nav-item-v2 active" onclick="navigate('home-view', 'nav-home')" id="nav-home">
             <img src="icns/Home.png" alt="Início" class="nav-icon-v2">
