@@ -444,25 +444,38 @@ function updateUI() {
         return;
     }
 
-    filteredReports.forEach(report => {
+   filteredReports.forEach(report => {
         const isDone = (report.status === 'Coletado' || report.status === 'Concluído');
         const badgeClass = isDone ? 'done' : 'progress';
         const checkIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
         const clockIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
         
-        listContainer.insertAdjacentHTML('beforeend', `
-            <div class="report-card" onclick="showReportDetails('${report.id}')">
-                <div class="report-img-v2" style="background-image: url('${report.image || ''}');"></div>
-                <div class="report-info-v2">
-                    <div class="report-header-row">
-                        <span class="badge ${badgeClass}">${isDone ? checkIcon : clockIcon} ${report.status || "Em Andamento"}</span>
-                        <span class="report-time">${report.time || report.date}</span>
-                    </div>
-                    <h4>${(report.address || "Local não informado").split(',')[0]}</h4>
-                    <p style="display:flex; align-items:center; gap:4px; font-size:12px;">Área Urbana</p>
+        // 1. Cria o contêiner do cartão
+        const card = document.createElement('div');
+        card.className = 'report-card';
+        card.onclick = () => showReportDetails(report.id);
+
+        // 2. Monta a estrutura HTML vazia (sem dados variáveis do usuário)
+        card.innerHTML = `
+            <div class="report-img-v2"></div>
+            <div class="report-info-v2">
+                <div class="report-header-row">
+                    <span class="badge ${badgeClass}">${isDone ? checkIcon : clockIcon} <span class="status-text"></span></span>
+                    <span class="report-time"></span>
                 </div>
+                <h4 class="report-address"></h4>
+                <p style="display:flex; align-items:center; gap:4px; font-size:12px;">Área Urbana</p>
             </div>
-        `);
+        `;
+
+        // 3. Injeta os dados de forma SEGURA (O navegador não executará códigos aqui)
+        card.querySelector('.report-img-v2').style.backgroundImage = `url('${report.image || ''}')`;
+        card.querySelector('.status-text').textContent = report.status || "Em Andamento";
+        card.querySelector('.report-time').textContent = report.time || report.date;
+        card.querySelector('.report-address').textContent = (report.address || "Local não informado").split(',')[0];
+
+        // 4. Adiciona o cartão pronto à lista
+        listContainer.appendChild(card);
     });
 }
 
